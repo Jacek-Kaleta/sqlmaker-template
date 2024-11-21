@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>sqlmaker-template</title>
+	<style>
+	body 
+	{ 
+		padding-left:1vw;
+		padding-right:1vw;
+		font-family: Consolas, "Courier New", monospace;
+		font-weight: normal;
+		font-size: 18px;
+		line-height: 25px;
+		letter-spacing: 0px;
+		margin-top:0px;
+		padding-top:0px;
+	}
+
+	a {font-size: 18px;}
+
+	.btn
+	{
+	font-family: 'Source Sans Pro', sans-serif;
+	font-weight: 900;
+	padding: 1rem 2rem;
+	xmargin-right: 0.5rem;
+	font-size: 1rem;
+	position: relative;
+	min-width: 12rem;
+	max-width: 90vw;
+	overflow: hidden;
+	border: 0;
+	cursor: pointer;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	background-color :  #FFFFFF;
+	color:  #343a40;
+	border:2px solid #343a40;
+	}
+
+	.btn:hover
+	{
+		color:#FFFFFF;
+		background-color:darkblue;
+		border:2px solid #FFFFFF;
+	}
+	</style>
+</head>
+<body>
+	<h1>Template Generator for SQLMAKER</h1>
+	<form id="file-form">
+		<label for="definition">SQL Template (.def):</label>
+		<input class ="btn" type="file" id="definition" accept=".def"><br><br>
+		
+		<label for="tables">Tables (.csv):</label>
+		<input class ="btn" type="file" id="tables" accept=".csv"><br><br>
+		
+		<label for="columns">Columns (.csv):</label>
+		<input class ="btn"  type="file" id="columns" accept=".csv"><br><br>
+
+		<button class ="btn"  type="button" onclick="processFiles()">Process Files</button>
+	</form>
+	<br/>
+	<a id="download-link" style="display: none;">Download Result</a>
+
+	<script>
+		async function processFiles() {
+			const definitionFile = document.getElementById('definition').files[0];
+			const tablesFile = document.getElementById('tables').files[0];
+			const columnsFile = document.getElementById('columns').files[0];
+
+			if (!definitionFile || !tablesFile || !columnsFile) {
+				alert("Please select all required input files!");
+				return;
+			}
+
+			try {
+				const [definition, tables, columns] = await Promise.all([
+					readFile(definitionFile),
+					readFile(tablesFile),
+					readFile(columnsFile),
+				]);
+
+				const sql = definition.split('\r\n');
+				const tableData = tables.split('\r\n').map(line => line.split('\t'));
+				const columnData = columns.split('\r\n').map(line => line.split('\t'));
+
+				let resultText = "";
+
+				sql.forEach(line => {
+					if (line.startsWith("#")) {
+						resultText += getFields(line.substring(1), tableData, columnData);
+					} else {
+						resultText += line + "\r\n";
+					}
+				});
+
+				createDownloadableFile(resultText, "result.txt");
+			} catch (error) {
+				console.error("Error processing files:", error);
+				alert("An error occurred while processing the files!");
+			}
+		}
+
+		function getFields(code, tables, columns) {
+			let text = "";
+			const table = searchTable(tables, code, 2);
+			if (table) {
+				text += `\t-- ${table[2]}, ${table[0]}.${table[1]}\r\n`;
+				columns.forEach(column => {
+					if (column[0] === table[0] && column[1] === table[1]) {
+						text += `\t\t${table[2]}.${column[2]},\r\n`;
+					}
+				});
+			}
+			return text;
+		}
+
+		function searchTable(mainTable, searchString, rowIndex) {
+			for (const subTable of mainTable) {
+				if (rowIndex < subTable.length && subTable[rowIndex] === searchString) {
+					return subTable;
+				}
+			}
+			return undefined;
+		}
+
+		function readFile(file) {
+			return new Promise((resolve, reject) => {
+				const reader = new FileReader();
+				reader.onload = () => resolve(reader.result);
+				reader.onerror = () => reject(reader.error);
+				reader.readAsText(file);
+			});
+		}
+
+		function createDownloadableFile(content, fileName) {
+			const blob = new Blob([content], { type: "text/plain" });
+			const link = document.getElementById("download-link");
+			link.href = URL.createObjectURL(blob);
+			link.download = fileName;
+			link.style.display = "block";
+			link.textContent = "Download Result";
+		}
+	</script>
+</body>
+</html>
